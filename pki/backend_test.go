@@ -354,8 +354,8 @@ func TestBackend_ECRoles_CSR(t *testing.T) {
 }
 
 // Performs some validity checking on the returned bundles
-func checkCertsAndPrivateKey(keyType string, key crypto.Signer, usage x509.KeyUsage, extUsage x509.ExtKeyUsage, validity time.Duration, certBundle *certutil.CertBundle) (*certutil.ParsedCertBundle, error) {
-	parsedCertBundle, err := certBundle.ToParsedCertBundle()
+func checkCertsAndPrivateKey(keyType string, key crypto.Signer, usage x509.KeyUsage, extUsage x509.ExtKeyUsage, validity time.Duration, certBundle *WrappedCertBundle) (*WrappedParsedCertBundle, error) {
+	parsedCertBundle, err := certBundle.ToParsedCertBundle(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("error parsing cert bundle: %s", err)
 	}
@@ -830,13 +830,13 @@ func generateRoleSteps(t *testing.T, useCSRs bool) []logicaltest.TestStep {
 	}
 
 	getCountryCheck := func(role roleEntry) logicaltest.TestCheckFunc {
-		var certBundle certutil.CertBundle
+		var certBundle WrappedCertBundle
 		return func(resp *logical.Response) error {
 			err := mapstructure.Decode(resp.Data, &certBundle)
 			if err != nil {
 				return err
 			}
-			parsedCertBundle, err := certBundle.ToParsedCertBundle()
+			parsedCertBundle, err := certBundle.ToParsedCertBundle(context.Background())
 			if err != nil {
 				return fmt.Errorf("error checking generated certificate: %s", err)
 			}
@@ -851,13 +851,13 @@ func generateRoleSteps(t *testing.T, useCSRs bool) []logicaltest.TestStep {
 	}
 
 	getOuCheck := func(role roleEntry) logicaltest.TestCheckFunc {
-		var certBundle certutil.CertBundle
+		var certBundle WrappedCertBundle
 		return func(resp *logical.Response) error {
 			err := mapstructure.Decode(resp.Data, &certBundle)
 			if err != nil {
 				return err
 			}
-			parsedCertBundle, err := certBundle.ToParsedCertBundle()
+			parsedCertBundle, err := certBundle.ToParsedCertBundle(context.Background())
 			if err != nil {
 				return fmt.Errorf("error checking generated certificate: %s", err)
 			}
@@ -872,13 +872,13 @@ func generateRoleSteps(t *testing.T, useCSRs bool) []logicaltest.TestStep {
 	}
 
 	getOrganizationCheck := func(role roleEntry) logicaltest.TestCheckFunc {
-		var certBundle certutil.CertBundle
+		var certBundle WrappedCertBundle
 		return func(resp *logical.Response) error {
 			err := mapstructure.Decode(resp.Data, &certBundle)
 			if err != nil {
 				return err
 			}
-			parsedCertBundle, err := certBundle.ToParsedCertBundle()
+			parsedCertBundle, err := certBundle.ToParsedCertBundle(context.Background())
 			if err != nil {
 				return fmt.Errorf("error checking generated certificate: %s", err)
 			}
@@ -893,13 +893,13 @@ func generateRoleSteps(t *testing.T, useCSRs bool) []logicaltest.TestStep {
 	}
 
 	getLocalityCheck := func(role roleEntry) logicaltest.TestCheckFunc {
-		var certBundle certutil.CertBundle
+		var certBundle WrappedCertBundle
 		return func(resp *logical.Response) error {
 			err := mapstructure.Decode(resp.Data, &certBundle)
 			if err != nil {
 				return err
 			}
-			parsedCertBundle, err := certBundle.ToParsedCertBundle()
+			parsedCertBundle, err := certBundle.ToParsedCertBundle(context.Background())
 			if err != nil {
 				return fmt.Errorf("error checking generated certificate: %s", err)
 			}
@@ -914,13 +914,13 @@ func generateRoleSteps(t *testing.T, useCSRs bool) []logicaltest.TestStep {
 	}
 
 	getProvinceCheck := func(role roleEntry) logicaltest.TestCheckFunc {
-		var certBundle certutil.CertBundle
+		var certBundle WrappedCertBundle
 		return func(resp *logical.Response) error {
 			err := mapstructure.Decode(resp.Data, &certBundle)
 			if err != nil {
 				return err
 			}
-			parsedCertBundle, err := certBundle.ToParsedCertBundle()
+			parsedCertBundle, err := certBundle.ToParsedCertBundle(context.Background())
 			if err != nil {
 				return fmt.Errorf("error checking generated certificate: %s", err)
 			}
@@ -935,13 +935,13 @@ func generateRoleSteps(t *testing.T, useCSRs bool) []logicaltest.TestStep {
 	}
 
 	getStreetAddressCheck := func(role roleEntry) logicaltest.TestCheckFunc {
-		var certBundle certutil.CertBundle
+		var certBundle WrappedCertBundle
 		return func(resp *logical.Response) error {
 			err := mapstructure.Decode(resp.Data, &certBundle)
 			if err != nil {
 				return err
 			}
-			parsedCertBundle, err := certBundle.ToParsedCertBundle()
+			parsedCertBundle, err := certBundle.ToParsedCertBundle(context.Background())
 			if err != nil {
 				return fmt.Errorf("error checking generated certificate: %s", err)
 			}
@@ -956,13 +956,13 @@ func generateRoleSteps(t *testing.T, useCSRs bool) []logicaltest.TestStep {
 	}
 
 	getPostalCodeCheck := func(role roleEntry) logicaltest.TestCheckFunc {
-		var certBundle certutil.CertBundle
+		var certBundle WrappedCertBundle
 		return func(resp *logical.Response) error {
 			err := mapstructure.Decode(resp.Data, &certBundle)
 			if err != nil {
 				return err
 			}
-			parsedCertBundle, err := certBundle.ToParsedCertBundle()
+			parsedCertBundle, err := certBundle.ToParsedCertBundle(context.Background())
 			if err != nil {
 				return fmt.Errorf("error checking generated certificate: %s", err)
 			}
@@ -979,7 +979,7 @@ func generateRoleSteps(t *testing.T, useCSRs bool) []logicaltest.TestStep {
 	// Returns a TestCheckFunc that performs various validity checks on the
 	// returned certificate information, mostly within checkCertsAndPrivateKey
 	getCnCheck := func(name string, role roleEntry, key crypto.Signer, usage x509.KeyUsage, extUsage x509.ExtKeyUsage, validity time.Duration) logicaltest.TestCheckFunc {
-		var certBundle certutil.CertBundle
+		var certBundle WrappedCertBundle
 		return func(resp *logical.Response) error {
 			err := mapstructure.Decode(resp.Data, &certBundle)
 			if err != nil {

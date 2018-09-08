@@ -182,6 +182,14 @@ more than one, specify alternative names in
 the alt_names map using OID 2.5.4.5.`,
 	}
 
+	fields["google_cloud_kms_key"] = &framework.FieldSchema{
+		Type: framework.TypeString,
+		Description: `If set, use the specified Google Cloud Platform
+Cloud KMS asymmetric signing key as the private key. The key must
+already exist.
+format: projects/$PROJECT/locations/$LOCATION/keyRings/$KEYRING/cryptoKeys/$KEYNAME/cryptoKeyVersions/$VERSION,`,
+	}
+
 	return fields
 }
 

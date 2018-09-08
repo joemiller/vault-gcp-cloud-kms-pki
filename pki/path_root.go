@@ -139,10 +139,17 @@ func (b *backend) pathCAGenerateRoot(ctx context.Context, req *logical.Request, 
 		role.MaxPathLength = &maxPathLength
 	}
 
+	params := &creationParameters{}
+	googleCloudKMSKey, ok := data.GetOk("google_cloud_kms_key")
+	if ok {
+		params.GoogleCloudKMSKey = googleCloudKMSKey.(string)
+	}
+
 	input := &dataBundle{
 		req:     req,
 		apiData: data,
 		role:    role,
+		params:  params,
 	}
 	parsedBundle, err := generateCert(ctx, b, input, true)
 	if err != nil {
@@ -150,6 +157,8 @@ func (b *backend) pathCAGenerateRoot(ctx context.Context, req *logical.Request, 
 		case errutil.UserError:
 			return logical.ErrorResponse(err.Error()), nil
 		case errutil.InternalError:
+			return nil, err
+		default:
 			return nil, err
 		}
 	}
@@ -193,6 +202,10 @@ func (b *backend) pathCAGenerateRoot(ctx context.Context, req *logical.Request, 
 			resp.Data["private_key"] = base64.StdEncoding.EncodeToString(parsedBundle.PrivateKeyBytes)
 			resp.Data["private_key_type"] = cb.PrivateKeyType
 		}
+	}
+
+	if parsedBundle.GoogleCloudKMSKey != "" {
+		resp.Data["google_cloud_kms_key"] = params.GoogleCloudKMSKey
 	}
 
 	if data.Get("private_key_format").(string) == "pkcs8" {
