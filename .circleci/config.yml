@@ -1,0 +1,56 @@
+version: 2
+jobs:
+  test:
+    docker:
+      - image: circleci/golang:1.11
+    working_directory: ~/app
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "go.sum" }}
+      - run: make test
+      - run: make build
+      - save_cache:
+          key: v1-dependencies-{{ checksum "go.sum" }}
+          paths:
+            - /go/pkg/mod
+      - persist_to_workspace:
+          root: .
+          paths:
+            - ./
+
+  release:
+    docker:
+      - image: circleci/golang:1.11
+    working_directory: ~/app
+    steps:
+      - attach_workspace:
+          at: .
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "go.sum" }}
+      - run: |
+          curl -s https://api.github.com/repos/pantheon-systems/autotag/releases/latest | \
+            grep browser_download | \
+            grep -i linux | \
+            cut -d '"' -f 4 | \
+            xargs curl -o ~/autotag -L \
+            && chmod 755 ~/autotag
+      - run: ~/autotag
+      - run: curl -sL https://git.io/goreleaser | bash -s -- --parallelism=2
+      # goreleaser install script runs goreleaser automatically
+
+workflows:
+  version: 2
+  primary:
+    jobs:
+      - test
+      - release:
+          requires:
+            - test
+          filters:
+            branches:
+              only:
+                - master
+                - gcp-cloud-hsm-mvp

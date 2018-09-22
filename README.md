@@ -58,3 +58,5 @@ TODO
     - [ ] simple root CA
     - [ ] root CA + intermediate CA (on kms)
     - [ ] root CA (offline/yubi) + intermediate CA (on kms)
+- [ ] circleci
+  - [ ] deps, test.. goreleaser for releases? yeah sure
