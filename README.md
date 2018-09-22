@@ -14,7 +14,7 @@ way back to the core Vault PKI backend.
 Usage
 -----
 
-TODO...
+TODO ...
 
 Examples
 --------
@@ -58,3 +58,5 @@ TODO
     - [ ] simple root CA
     - [ ] root CA + intermediate CA (on kms)
     - [ ] root CA (offline/yubi) + intermediate CA (on kms)
+- [ ] circleci
+  - [ ] deps, test.. goreleaser for releases? yeah sure

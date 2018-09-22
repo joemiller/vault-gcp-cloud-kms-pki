@@ -6,3 +6,4 @@ bin/
 tmp-intermediate
 tmp-rootca
 Attic
+dist/
