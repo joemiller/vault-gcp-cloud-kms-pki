@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/errwrap"
+	"github.com/hashicorp/go-gcp-common/gcputil"
 	"github.com/hashicorp/vault/helper/errutil"
 	"github.com/hashicorp/vault/logical"
 	"github.com/hashicorp/vault/logical/framework"
@@ -32,6 +33,7 @@ func pathGenerateRoot(b *backend) *framework.Path {
 	ret.Fields = addCACommonFields(map[string]*framework.FieldSchema{})
 	ret.Fields = addCAKeyGenerationFields(ret.Fields)
 	ret.Fields = addCAIssueFields(ret.Fields)
+	ret.Fields = addGoogleKMSFields(ret.Fields)
 
 	return ret
 }
@@ -143,6 +145,15 @@ func (b *backend) pathCAGenerateRoot(ctx context.Context, req *logical.Request, 
 	googleCloudKMSKey, ok := data.GetOk("google_cloud_kms_key")
 	if ok {
 		params.GoogleCloudKMSKey = googleCloudKMSKey.(string)
+	}
+
+	googleCredsRaw, ok := data.GetOk("google_credentials")
+	if ok {
+		_, err := gcputil.Credentials(googleCredsRaw.(string))
+		if err != nil {
+			return logical.ErrorResponse(fmt.Sprintf("invalid Google Cloud credentials JSON file: %v", err)), nil
+		}
+		params.GoogleCredentials = googleCredsRaw.(string)
 	}
 
 	input := &dataBundle{

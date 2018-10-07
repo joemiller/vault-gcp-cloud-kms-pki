@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/errwrap"
+	"github.com/hashicorp/go-gcp-common/gcputil"
 	"github.com/hashicorp/vault/helper/certutil"
 	"github.com/hashicorp/vault/helper/errutil"
 	"github.com/hashicorp/vault/logical"
@@ -26,6 +27,7 @@ func pathGenerateIntermediate(b *backend) *framework.Path {
 
 	ret.Fields = addCACommonFields(map[string]*framework.FieldSchema{})
 	ret.Fields = addCAKeyGenerationFields(ret.Fields)
+	ret.Fields = addGoogleKMSFields(ret.Fields)
 	ret.Fields["add_basic_constraints"] = &framework.FieldSchema{
 		Type: framework.TypeBool,
 		Description: `Whether to add a Basic Constraints
@@ -77,6 +79,14 @@ func (b *backend) pathGenerateIntermediate(ctx context.Context, req *logical.Req
 	if ok {
 		params.GoogleCloudKMSKey = googleCloudKMSKey.(string)
 	}
+	googleCredsRaw, ok := data.GetOk("google_credentials")
+	if ok {
+		_, err := gcputil.Credentials(googleCredsRaw.(string))
+		if err != nil {
+			return logical.ErrorResponse(fmt.Sprintf("invalid Google Cloud credentials JSON file: %v", err)), nil
+		}
+		params.GoogleCredentials = googleCredsRaw.(string)
+	}
 
 	input := &dataBundle{
 		role:    role,
@@ -89,7 +99,7 @@ func (b *backend) pathGenerateIntermediate(ctx context.Context, req *logical.Req
 		switch err.(type) {
 		case errutil.UserError:
 			return logical.ErrorResponse(err.Error()), nil
-		case errutil.InternalError:
+		default:
 			return nil, err
 		}
 	}

@@ -19,4 +19,13 @@ release-snapshot:
 run-dev: build
 	sh ./run-dev.sh
 
+build-docker-demo: build-linux
+	@cp ./bin/vault-gcp-cloud-kms-pki ./demos/docker
+	@docker build -t vault-gcp-cloud-kms-pki ./demos/docker
+
+run-docker-demo: build-docker-demo
+	@docker run --rm --name vault \
+		-v "$(PWD)/tmp-vault-data:/vault-file" \
+		vault-gcp-cloud-kms-pki
+
 .PHONY: all test build build-linux release-snapshot

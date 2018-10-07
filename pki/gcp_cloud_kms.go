@@ -3,29 +3,56 @@ package pki
 import (
 	"context"
 
+	"github.com/hashicorp/go-gcp-common/gcputil"
 	"github.com/hashicorp/vault/helper/certutil"
-	"github.com/hashicorp/vault/helper/errutil"
 	"github.com/joemiller/vault-gcp-cloud-kms-pki/kmssigner"
-	"golang.org/x/oauth2/google"
+	"golang.org/x/oauth2"
 	cloudkms "google.golang.org/api/cloudkms/v1"
 )
 
-func googleKMSSigner(ctx context.Context, keyName string) (kmssigner.Signer, error) {
-	oauthClient, err := google.DefaultClient(ctx, cloudkms.CloudPlatformScope)
+// TODO(joe): retire this code if we're not going to store creds in Storage
+// func fetchGoogleCreds(ctx context.Context, s logical.Storage) (string, error) {
+// 	if s == nil {
+// 		return "", nil
+// 	}
+// 	credsEntry, err := s.Get(ctx, "google_credentials")
+// 	if err != nil {
+// 		return "", err
+// 	}
+// 	credsJSON := ""
+// 	if credsEntry != nil {
+// 		credsJSON = string(credsEntry.Value)
+// 	}
+// 	return credsJSON, nil
+// }
+
+// TODO: document this func
+func newGoogleKMSClient(ctx context.Context, credsJSON string) (*cloudkms.Service, error) {
+	scopes := []string{"https://www.googleapis.com/auth/cloud-platform"}
+
+	_, tokenSource, err := gcputil.FindCredentials(credsJSON, ctx, scopes...)
 	if err != nil {
-		return nil, errutil.InternalError{Err: err.Error()}
+		return nil, err
 	}
+
+	oauthClient := oauth2.NewClient(ctx, tokenSource)
 	svc, err := cloudkms.New(oauthClient)
 	if err != nil {
-		return nil, errutil.InternalError{Err: err.Error()}
+		return nil, err
 	}
-	signer, err := kmssigner.New(svc, keyName)
+	return svc, nil
+}
+
+// TODO: document this func
+func kmsSigner(svc *cloudkms.Service, key string) (kmssigner.Signer, error) {
+	signer, err := kmssigner.New(svc, key)
 	if err != nil {
-		return nil, errutil.InternalError{Err: err.Error()}
+		return nil, err
 	}
 	return signer, nil
 }
 
+// gcpKMSKeyType converts a GCP KMS key algorithm identifier to a certutil.PrivateKeyType
 func gcpKMSKeyType(algo string) certutil.PrivateKeyType {
 	switch algo {
 	case "RSA_SIGN_PKCS1_2048_SHA256":

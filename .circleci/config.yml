@@ -1,6 +1,6 @@
 version: 2
 jobs:
-  test:
+  deps:
     docker:
       - image: circleci/golang:1.11
     working_directory: ~/app
@@ -9,12 +9,56 @@ jobs:
       - restore_cache:
           keys:
             - v1-dependencies-{{ checksum "go.sum" }}
-      - run: make test
-      - run: make build
+      - run: go get -v
       - save_cache:
           key: v1-dependencies-{{ checksum "go.sum" }}
           paths:
             - /go/pkg/mod
+      - persist_to_workspace:
+          root: .
+          paths:
+            - ./
+
+  test-unit:
+    docker:
+      - image: circleci/golang:1.11
+    working_directory: ~/app
+    steps:
+      - attach_workspace:
+          at: .
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "go.sum" }}
+      - run: make test
+
+  test-acceptance:
+    docker:
+      - image: circleci/golang:1.11
+    working_directory: ~/app
+    steps:
+      - attach_workspace:
+          at: .
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "go.sum" }}
+      - run: echo "$GOOGLE_SERVICE_ACCOUNT_CREDS" | base64 --decode >/tmp/svc-account.json
+      - run:
+          command: make test
+          environment:
+            VAULT_ACC: "1"
+            TEST_GOOGLE_CREDENTIALS_FILE: /tmp/svc-account.json
+
+  build:
+    docker:
+      - image: circleci/golang:1.11
+    working_directory: ~/app
+    steps:
+      - attach_workspace:
+          at: .
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "go.sum" }}
+      - run: make build
       - persist_to_workspace:
           root: .
           paths:
@@ -45,10 +89,21 @@ workflows:
   version: 2
   primary:
     jobs:
-      - test
+      - deps
+      - test-unit:
+          requires:
+            - deps
+      - test-acceptance:
+          requires:
+            - deps
+      - build:
+          requires:
+            - deps
       - release:
           requires:
-            - test
+            - test-unit
+            - test-acceptance
+            - build
           filters:
             branches:
               only:

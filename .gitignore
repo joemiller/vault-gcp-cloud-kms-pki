@@ -7,3 +7,6 @@ tmp-intermediate
 tmp-rootca
 Attic
 dist/
+.vscode/
+test-svcaccount.json
+.env
