@@ -23,13 +23,13 @@ authenticated.
 1. Download and decompress the latest plugin binary from the [releases](https://github.com/joemiller/vault-gcp-cloud-kms-pki/releases)
    tab on GitHub. Alternatively you can compile the plugin from source (`make build`).
 
-3. Move the compiled plugin into Vault's configured `plugin_directory`:
+2. Move the compiled plugin into Vault's configured `plugin_directory`:
 
     ```sh
     mv vault-gcp-cloud-kms-pki /etc/vault/plugins/vault-gcp-cloud-kms-pki
     ```
 
-4. Calculate the SHA256 of the plugin and register it in Vault's plugin catalog.
+3. Calculate the SHA256 of the plugin and register it in Vault's plugin catalog.
    If you are downloading the pre-compiled binary, it is highly recommended that
    you use the published checksums to verify integrity.
 
@@ -41,7 +41,7 @@ authenticated.
       command="vault-gcp-cloud-kms-pki" \
     ```
 
-5. Mount the secrets backend:
+4. Mount the secrets backend:
 
     ```sh
     vault secrets enable \
@@ -49,7 +49,7 @@ authenticated.
       -plugin-name="vault-gcp-cloud-kms-pki" plugin
     ```
 
-6. To configure a new root CA backed by a KMS signing key:
+5. To configure a new root CA backed by a KMS signing key:
 
     ```sh
     vault write \
@@ -59,7 +59,7 @@ authenticated.
         google_credentials=@service-account.json
     ```
 
-7. Or, to configure a new intermediate CA backed by a KMS signing key:
+6. Or, to configure a new intermediate CA backed by a KMS signing key:
 
     ```sh
     vault write \
@@ -75,7 +75,7 @@ multiple CA's.
 
 The `google_credentials` attribute is optional. The plugin uses the official Google Cloud Golang SDK
 which means it supports the [common ways of providing credentials](https://cloud.google.com/docs/authentication/production#providing_credentials_to_your_application)
- to Google Cloud.
+to Google Cloud.
 
 In addition to specifying credentials directly via Vault configuration, you can also get
 configuration from the following values on the Vault server:
@@ -85,7 +85,7 @@ configuration from the following values on the Vault server:
    is present, the resulting credentials are used. If the credentials are invalid, an error is
    returned.
 
-1. Default instance credentials. When no environment variable is present, the default service
+2. Default instance credentials. When no environment variable is present, the default service
    account credentials are used. This is useful when running Vault on Google Compute Engine or
    Google Kubernetes Engine
 
@@ -105,7 +105,8 @@ The keys must be asymmetric-signing keys.
       --location us-west1
     ```
 
-2. Next, create an **asymmetric-signing** key named `root-ca`:
+2. Next, create an **asymmetric-signing** key named `root-ca`. Only RSA PKCS#1 keys are currently
+   supported:
 
     ```sh
     gcloud alpha kms keys create \
@@ -135,8 +136,8 @@ The credentials given to the service account used by Vault must include the perm
 * cloudkms.cryptoKeyVersions.useToSign
 * cloudkms.cryptoKeyVersions.viewPublicKey
 
-The simplest approach is to assign the pre-defined roles `roles/viewer` and 
-roles/cloudkms.signerVerifier` to the service account. Alternatively you could also create\
+The simplest approach is to assign the pre-defined roles `roles/viewer` and
+roles/cloudkms.signerVerifier` to the service account. Alternatively, create
 a custom role with only these permissions assigned.
 
 Example:
@@ -147,7 +148,7 @@ Example:
     gcloud iam service-accounts create "vault-kms" --project "my-project"
     ```
 
-1. Assign roles to the service account:
+2. Assign roles to the service account:
 
     ```sh
     gcloud projects add-iam-policy-binding "my-project" \
@@ -159,10 +160,10 @@ Example:
     --role roles/viewer
     ```
 
-1. Create credentials JSON file `service-account.json`:
+3. Create credentials JSON file `service-account.json`:
 
     ```sh
-    gcloud iam service-accounts keys create "service-account.json" \ 
+    gcloud iam service-accounts keys create "service-account.json" \
     --iam-account="vault-kms@my-project.iam.gserviceaccount.com" \
     --project "my-project"
     ```
@@ -205,5 +206,5 @@ TODO
 ----
 
 * [ ] add support for EC keys
-* [ ] contact hashi about possibility of merging KMS code into core PKI backend
 * [x] setup cirlceci to run acceptance tests
+* [ ] upstream into core vault...

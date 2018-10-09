@@ -1169,22 +1169,11 @@ func createCertificate(ctx context.Context, data *dataBundle) (*WrappedParsedCer
 	}
 
 	if data.params.GoogleCloudKMSKey != "" {
-		key := data.params.GoogleCloudKMSKey
-		creds := data.params.GoogleCredentials
-
-		result.GoogleCloudKMSKey = key
-		result.GoogleCredentials = creds
-
-		kms, err := newGoogleKMSClient(ctx, creds)
-		if err != nil {
+		if err := parseGooglePrivateKey(ctx, data.params.GoogleCloudKMSKey,
+			data.params.GoogleCredentials,
+			result); err != nil {
 			return nil, errutil.InternalError{Err: err.Error()}
 		}
-		signer, err := kmsSigner(kms, key)
-		if err != nil {
-			return nil, errutil.InternalError{Err: err.Error()}
-		}
-		keyType := gcpKMSKeyType(signer.Algorithm())
-		result.SetParsedPrivateKey(signer, keyType, []byte(""))
 	} else {
 		if err := certutil.GeneratePrivateKey(data.params.KeyType,
 			data.params.KeyBits,
@@ -1307,24 +1296,11 @@ func createCSR(ctx context.Context, data *dataBundle) (*WrappedParsedCSRBundle, 
 	result := &WrappedParsedCSRBundle{}
 
 	if data.params.GoogleCloudKMSKey != "" {
-		// TODO(joe): try converting this and the similar block of code used by generateCert into a func in the cert_bundle.go file
-		// TODO(joe): maybe -- googleKeyToBundle(key, creds, result) error
-		key := data.params.GoogleCloudKMSKey
-		creds := data.params.GoogleCredentials
-
-		result.GoogleCloudKMSKey = key
-		result.GoogleCredentials = creds
-
-		kms, err := newGoogleKMSClient(ctx, creds)
-		if err != nil {
+		if err := parseGooglePrivateKey(ctx, data.params.GoogleCloudKMSKey,
+			data.params.GoogleCredentials,
+			result); err != nil {
 			return nil, errutil.InternalError{Err: err.Error()}
 		}
-		signer, err := kmsSigner(kms, key)
-		if err != nil {
-			return nil, errutil.InternalError{Err: err.Error()}
-		}
-		keyType := gcpKMSKeyType(signer.Algorithm())
-		result.SetParsedPrivateKey(signer, keyType, []byte(""))
 	} else {
 		if err := certutil.GeneratePrivateKey(data.params.KeyType,
 			data.params.KeyBits,

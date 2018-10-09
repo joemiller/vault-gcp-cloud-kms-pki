@@ -10,23 +10,6 @@ import (
 	cloudkms "google.golang.org/api/cloudkms/v1"
 )
 
-// TODO(joe): retire this code if we're not going to store creds in Storage
-// func fetchGoogleCreds(ctx context.Context, s logical.Storage) (string, error) {
-// 	if s == nil {
-// 		return "", nil
-// 	}
-// 	credsEntry, err := s.Get(ctx, "google_credentials")
-// 	if err != nil {
-// 		return "", err
-// 	}
-// 	credsJSON := ""
-// 	if credsEntry != nil {
-// 		credsJSON = string(credsEntry.Value)
-// 	}
-// 	return credsJSON, nil
-// }
-
-// TODO: document this func
 func newGoogleKMSClient(ctx context.Context, credsJSON string) (*cloudkms.Service, error) {
 	scopes := []string{"https://www.googleapis.com/auth/cloud-platform"}
 
@@ -43,7 +26,6 @@ func newGoogleKMSClient(ctx context.Context, credsJSON string) (*cloudkms.Servic
 	return svc, nil
 }
 
-// TODO: document this func
 func kmsSigner(svc *cloudkms.Service, key string) (kmssigner.Signer, error) {
 	signer, err := kmssigner.New(svc, key)
 	if err != nil {

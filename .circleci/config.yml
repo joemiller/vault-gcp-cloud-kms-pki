@@ -83,7 +83,6 @@ jobs:
             && chmod 755 ~/autotag
       - run: ~/autotag
       - run: curl -sL https://git.io/goreleaser | bash -s -- --parallelism=2
-      # goreleaser install script runs goreleaser automatically
 
 workflows:
   version: 2

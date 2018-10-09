@@ -33,33 +33,38 @@ type WrappedParsedCSRBundle struct {
 	GoogleCredentials        string
 }
 
-// ToParsedCertBundle resolves any externally hosed signing keys and assigns the resolved
+// GooglePrivateKeyContainer extends the upstream ParsedPrivateKeyContainer interface by adding
+// a method for setting Google specific parameters on the WrappedParsed{Cert,CSR}Bundle objects
+type GooglePrivateKeyContainer interface {
+	certutil.ParsedPrivateKeyContainer
+	SetGoogleParams(key, creds string)
+}
+
+// ToParsedCertBundle resolves any externally hosted signing keys then adds the parsed
 // crypto.Signer on the PrivateKey attribute of the ParsedCertBundle
-//func (c *WrappedCertBundle) ToParsedCertBundle(kms *cloudkms.Service) (*WrappedParsedCertBundle, error) {
 func (c *WrappedCertBundle) ToParsedCertBundle(ctx context.Context) (*WrappedParsedCertBundle, error) {
+	// first, parse the embedded certBundle
 	parsedBundle, err := c.CertBundle.ToParsedCertBundle()
 	if err != nil {
 		return nil, err
 	}
+	// wrap the embedded cert bundle
 	wrapParsedBundle := &WrappedParsedCertBundle{
-		ParsedCertBundle:  *parsedBundle,
-		GoogleCloudKMSKey: c.GoogleCloudKMSKey,
-		GoogleCredentials: c.GoogleCredentials,
+		ParsedCertBundle: *parsedBundle,
 	}
 
+	// if the bundle contains an externally hosted Google KMS key, parse it and set the values on the wrapped bundle
 	if c.GoogleCloudKMSKey != "" {
-		kms, err := newGoogleKMSClient(ctx, c.GoogleCredentials)
-		if err != nil {
+		if err := parseGooglePrivateKey(ctx, c.GoogleCloudKMSKey, c.GoogleCredentials, wrapParsedBundle); err != nil {
 			return nil, err
 		}
-		signer, err := kmsSigner(kms, c.GoogleCloudKMSKey)
-		if err != nil {
-			return nil, fmt.Errorf("unable to lookup GCP Cloud KMS Key: %v", err)
-		}
-		keyType := gcpKMSKeyType(signer.Algorithm())
-		wrapParsedBundle.SetParsedPrivateKey(signer, keyType, []byte(""))
 	}
 	return wrapParsedBundle, nil
+}
+
+func (c *WrappedParsedCertBundle) SetGoogleParams(key, creds string) {
+	c.GoogleCloudKMSKey = key
+	c.GoogleCredentials = creds
 }
 
 func (c *WrappedParsedCertBundle) ToCertBundle() (*WrappedCertBundle, error) {
@@ -75,31 +80,29 @@ func (c *WrappedParsedCertBundle) ToCertBundle() (*WrappedCertBundle, error) {
 	return wrapCertBundle, nil
 }
 
-/// TODO(joe): document
 func (c *WrappedCSRBundle) ToParsedCSRBundle(ctx context.Context) (*WrappedParsedCSRBundle, error) {
+	// first, parse the embedded csrBundle
 	csrBundle, err := c.CSRBundle.ToParsedCSRBundle()
 	if err != nil {
 		return nil, err
 	}
+	// wrap the embedded cert bundle
 	wrapParsedBundle := &WrappedParsedCSRBundle{
-		ParsedCSRBundle:   *csrBundle,
-		GoogleCloudKMSKey: c.GoogleCloudKMSKey,
-		GoogleCredentials: c.GoogleCredentials,
+		ParsedCSRBundle: *csrBundle,
 	}
 
+	// if the bundle contains an externally hosted Google KMS key, parse it and set the values on the wrapped bundle
 	if c.GoogleCloudKMSKey != "" {
-		kms, err := newGoogleKMSClient(ctx, c.GoogleCredentials)
-		if err != nil {
+		if err := parseGooglePrivateKey(ctx, c.GoogleCloudKMSKey, c.GoogleCredentials, wrapParsedBundle); err != nil {
 			return nil, err
 		}
-		signer, err := kmsSigner(kms, c.GoogleCloudKMSKey)
-		if err != nil {
-			return nil, fmt.Errorf("unable to lookup GCP Cloud KMS Key: %v", err)
-		}
-		keyType := gcpKMSKeyType(signer.Algorithm())
-		wrapParsedBundle.SetParsedPrivateKey(signer, keyType, []byte(""))
 	}
 	return wrapParsedBundle, nil
+}
+
+func (c *WrappedParsedCSRBundle) SetGoogleParams(key, creds string) {
+	c.GoogleCloudKMSKey = key
+	c.GoogleCredentials = creds
 }
 
 func (c *WrappedParsedCSRBundle) ToCSRBundle() (*WrappedCSRBundle, error) {
@@ -112,6 +115,24 @@ func (c *WrappedParsedCSRBundle) ToCSRBundle() (*WrappedCSRBundle, error) {
 		GoogleCloudKMSKey: c.GoogleCloudKMSKey,
 		GoogleCredentials: c.GoogleCredentials,
 	}
-	wrapCSRBundle.PrivateKeyType = c.PrivateKeyType
 	return wrapCSRBundle, nil
+}
+
+// parseGooglePrivateKey parses a Google KMS key identified by key path and optionally service-account
+// credentials in JSON format into a crypto.Signer and adds the parsed values to the GooglePrivateKeyContainer
+// object. If the credentials are empty the Google SDK Default Application Credentials methods will attempt to discover credentials to use.
+func parseGooglePrivateKey(ctx context.Context, key, creds string, c GooglePrivateKeyContainer) error {
+	kms, err := newGoogleKMSClient(ctx, creds)
+	if err != nil {
+		return err
+	}
+	signer, err := kmsSigner(kms, key)
+	if err != nil {
+		return fmt.Errorf("unable to lookup GCP Cloud KMS Key: %v", err)
+	}
+	keyType := gcpKMSKeyType(signer.Algorithm())
+
+	c.SetParsedPrivateKey(signer, keyType, []byte(""))
+	c.SetGoogleParams(key, creds)
+	return nil
 }
