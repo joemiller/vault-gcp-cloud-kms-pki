@@ -87,10 +87,16 @@ type creationParameters struct {
 
 	// The maximum path length to encode
 	MaxPathLength int
+
+	// The path to the Google Cloud HSM key to use (including version)
+	// format: projects/$PROJECT/locations/$LOCATION/keyRings/$KEYRING/cryptoKeys/$KEYNAME/cryptoKeyVersions/$VERSION
+	GoogleCloudKMSKey string
+	// JSON service account. If empty the credentials will be looked up according to the Application Default Credentials mechanism
+	GoogleCredentials string
 }
 
 type caInfoBundle struct {
-	certutil.ParsedCertBundle
+	WrappedParsedCertBundle
 	URLs *urlEntries
 }
 
@@ -186,12 +192,12 @@ func fetchCAInfo(ctx context.Context, req *logical.Request) (*caInfoBundle, erro
 		return nil, errutil.UserError{Err: "backend must be configured with a CA certificate/key"}
 	}
 
-	var bundle certutil.CertBundle
+	bundle := WrappedCertBundle{}
 	if err := bundleEntry.DecodeJSON(&bundle); err != nil {
 		return nil, errutil.InternalError{Err: fmt.Sprintf("unable to decode local CA certificate/key: %v", err)}
 	}
 
-	parsedBundle, err := bundle.ToParsedCertBundle()
+	parsedBundle, err := bundle.ToParsedCertBundle(ctx)
 	if err != nil {
 		return nil, errutil.InternalError{Err: err.Error()}
 	}
@@ -536,8 +542,7 @@ func validateSerialNumber(data *dataBundle, serialNumber string) string {
 func generateCert(ctx context.Context,
 	b *backend,
 	data *dataBundle,
-	isCA bool) (*certutil.ParsedCertBundle, error) {
-
+	isCA bool) (*WrappedParsedCertBundle, error) {
 	if data.role == nil {
 		return nil, errutil.InternalError{Err: "no role found in data bundle"}
 	}
@@ -581,7 +586,7 @@ func generateCert(ctx context.Context,
 		}
 	}
 
-	parsedBundle, err := createCertificate(data)
+	parsedBundle, err := createCertificate(ctx, data)
 	if err != nil {
 		return nil, err
 	}
@@ -591,7 +596,7 @@ func generateCert(ctx context.Context,
 
 // N.B.: This is only meant to be used for generating intermediate CAs.
 // It skips some sanity checks.
-func generateIntermediateCSR(b *backend, data *dataBundle) (*certutil.ParsedCSRBundle, error) {
+func generateIntermediateCSR(ctx context.Context, b *backend, data *dataBundle) (*WrappedParsedCSRBundle, error) {
 	err := generateCreationBundle(b, data)
 	if err != nil {
 		return nil, err
@@ -600,7 +605,7 @@ func generateIntermediateCSR(b *backend, data *dataBundle) (*certutil.ParsedCSRB
 		return nil, errutil.InternalError{Err: "nil parameters received from parameter bundle generation"}
 	}
 
-	parsedBundle, err := createCSR(data)
+	parsedBundle, err := createCSR(ctx, data)
 	if err != nil {
 		return nil, err
 	}
@@ -611,7 +616,7 @@ func generateIntermediateCSR(b *backend, data *dataBundle) (*certutil.ParsedCSRB
 func signCert(b *backend,
 	data *dataBundle,
 	isCA bool,
-	useCSRValues bool) (*certutil.ParsedCertBundle, error) {
+	useCSRValues bool) (*WrappedParsedCertBundle, error) {
 
 	if data.role == nil {
 		return nil, errutil.InternalError{Err: "no role found in data bundle"}
@@ -1004,6 +1009,15 @@ func generateCreationBundle(b *backend, data *dataBundle) error {
 		}
 	}
 
+	googleCloudKMSKey := ""
+	if data.params != nil {
+		googleCloudKMSKey = data.params.GoogleCloudKMSKey
+	}
+	googleCredentials := ""
+	if data.params != nil {
+		googleCredentials = data.params.GoogleCredentials
+	}
+
 	data.params = &creationParameters{
 		Subject:                       subject,
 		DNSNames:                      dnsNames,
@@ -1019,6 +1033,8 @@ func generateCreationBundle(b *backend, data *dataBundle) error {
 		ExtKeyUsageOIDs:               data.role.ExtKeyUsageOIDs,
 		PolicyIdentifiers:             data.role.PolicyIdentifiers,
 		BasicConstraintsValidForNonCA: data.role.BasicConstraintsValidForNonCA,
+		GoogleCloudKMSKey:             googleCloudKMSKey,
+		GoogleCredentials:             googleCredentials,
 	}
 
 	// Don't deal with URLs or max path length if it's self-signed, as these
@@ -1143,19 +1159,27 @@ func addExtKeyUsageOids(data *dataBundle, certTemplate *x509.Certificate) {
 
 // Performs the heavy lifting of creating a certificate. Returns
 // a fully-filled-in ParsedCertBundle.
-func createCertificate(data *dataBundle) (*certutil.ParsedCertBundle, error) {
+func createCertificate(ctx context.Context, data *dataBundle) (*WrappedParsedCertBundle, error) {
 	var err error
-	result := &certutil.ParsedCertBundle{}
+	result := &WrappedParsedCertBundle{}
 
 	serialNumber, err := certutil.GenerateSerialNumber()
 	if err != nil {
 		return nil, err
 	}
 
-	if err := certutil.GeneratePrivateKey(data.params.KeyType,
-		data.params.KeyBits,
-		result); err != nil {
-		return nil, err
+	if data.params.GoogleCloudKMSKey != "" {
+		if err := parseGooglePrivateKey(ctx, data.params.GoogleCloudKMSKey,
+			data.params.GoogleCredentials,
+			result); err != nil {
+			return nil, errutil.InternalError{Err: err.Error()}
+		}
+	} else {
+		if err := certutil.GeneratePrivateKey(data.params.KeyType,
+			data.params.KeyBits,
+			result); err != nil {
+			return nil, err
+		}
 	}
 
 	subjKeyID, err := certutil.GetSubjKeyID(result.PrivateKey)
@@ -1267,14 +1291,22 @@ func createCertificate(data *dataBundle) (*certutil.ParsedCertBundle, error) {
 
 // Creates a CSR. This is currently only meant for use when
 // generating an intermediate certificate.
-func createCSR(data *dataBundle) (*certutil.ParsedCSRBundle, error) {
+func createCSR(ctx context.Context, data *dataBundle) (*WrappedParsedCSRBundle, error) {
 	var err error
-	result := &certutil.ParsedCSRBundle{}
+	result := &WrappedParsedCSRBundle{}
 
-	if err := certutil.GeneratePrivateKey(data.params.KeyType,
-		data.params.KeyBits,
-		result); err != nil {
-		return nil, err
+	if data.params.GoogleCloudKMSKey != "" {
+		if err := parseGooglePrivateKey(ctx, data.params.GoogleCloudKMSKey,
+			data.params.GoogleCredentials,
+			result); err != nil {
+			return nil, errutil.InternalError{Err: err.Error()}
+		}
+	} else {
+		if err := certutil.GeneratePrivateKey(data.params.KeyType,
+			data.params.KeyBits,
+			result); err != nil {
+			return nil, err
+		}
 	}
 
 	// Like many root CAs, other information is ignored
@@ -1330,7 +1362,7 @@ func createCSR(data *dataBundle) (*certutil.ParsedCSRBundle, error) {
 
 // Performs the heavy lifting of generating a certificate from a CSR.
 // Returns a ParsedCertBundle sans private keys.
-func signCertificate(data *dataBundle) (*certutil.ParsedCertBundle, error) {
+func signCertificate(data *dataBundle) (*WrappedParsedCertBundle, error) {
 	switch {
 	case data == nil:
 		return nil, errutil.UserError{Err: "nil data bundle given to signCertificate"}
@@ -1347,7 +1379,7 @@ func signCertificate(data *dataBundle) (*certutil.ParsedCertBundle, error) {
 		return nil, errutil.UserError{Err: "request signature invalid"}
 	}
 
-	result := &certutil.ParsedCertBundle{}
+	result := &WrappedParsedCertBundle{}
 
 	serialNumber, err := certutil.GenerateSerialNumber()
 	if err != nil {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/hashicorp/vault/helper/pluginutil"
 	"github.com/hashicorp/vault/logical/plugin"
-	"github.com/joemiller/vault-cloud-kms-pki/pki"
+	"github.com/joemiller/vault-gcp-cloud-kms-pki/pki"
 )
 
 func main() {

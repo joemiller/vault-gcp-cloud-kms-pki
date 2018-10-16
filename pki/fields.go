@@ -185,6 +185,25 @@ the alt_names map using OID 2.5.4.5.`,
 	return fields
 }
 
+// addGoogleKMSFields adds fields with help text specific to the use of signing keys stored in Google KMS
+func addGoogleKMSFields(fields map[string]*framework.FieldSchema) map[string]*framework.FieldSchema {
+	fields["google_cloud_kms_key"] = &framework.FieldSchema{
+		Type: framework.TypeString,
+		Description: `If set, use the specified Google Cloud Platform
+Cloud KMS asymmetric signing key as the private key. The key must
+already exist.
+format: projects/$PROJECT/locations/$LOCATION/keyRings/$KEYRING/cryptoKeys/$KEYNAME/cryptoKeyVersions/$VERSION,`,
+	}
+
+	fields["google_credentials"] = &framework.FieldSchema{
+		Type: framework.TypeString,
+		Description: `GCP IAM service account credentials JSON with
+permissions to create use the KMS key for signing operations.`,
+	}
+
+	return fields
+}
+
 // addCAKeyGenerationFields adds fields with help text specific to CA key
 // generation and exporting
 func addCAKeyGenerationFields(fields map[string]*framework.FieldSchema) map[string]*framework.FieldSchema {

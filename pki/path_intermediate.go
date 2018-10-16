@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/errwrap"
+	"github.com/hashicorp/go-gcp-common/gcputil"
 	"github.com/hashicorp/vault/helper/certutil"
 	"github.com/hashicorp/vault/helper/errutil"
 	"github.com/hashicorp/vault/logical"
@@ -26,6 +27,7 @@ func pathGenerateIntermediate(b *backend) *framework.Path {
 
 	ret.Fields = addCACommonFields(map[string]*framework.FieldSchema{})
 	ret.Fields = addCAKeyGenerationFields(ret.Fields)
+	ret.Fields = addGoogleKMSFields(ret.Fields)
 	ret.Fields["add_basic_constraints"] = &framework.FieldSchema{
 		Type: framework.TypeBool,
 		Description: `Whether to add a Basic Constraints
@@ -71,17 +73,33 @@ func (b *backend) pathGenerateIntermediate(ctx context.Context, req *logical.Req
 	}
 
 	var resp *logical.Response
+
+	params := &creationParameters{}
+	googleCloudKMSKey, ok := data.GetOk("google_cloud_kms_key")
+	if ok {
+		params.GoogleCloudKMSKey = googleCloudKMSKey.(string)
+	}
+	googleCredsRaw, ok := data.GetOk("google_credentials")
+	if ok {
+		_, err := gcputil.Credentials(googleCredsRaw.(string))
+		if err != nil {
+			return logical.ErrorResponse(fmt.Sprintf("invalid Google Cloud credentials JSON file: %v", err)), nil
+		}
+		params.GoogleCredentials = googleCredsRaw.(string)
+	}
+
 	input := &dataBundle{
 		role:    role,
 		req:     req,
 		apiData: data,
+		params:  params,
 	}
-	parsedBundle, err := generateIntermediateCSR(b, input)
+	parsedBundle, err := generateIntermediateCSR(ctx, b, input)
 	if err != nil {
 		switch err.(type) {
 		case errutil.UserError:
 			return logical.ErrorResponse(err.Error()), nil
-		case errutil.InternalError:
+		default:
 			return nil, err
 		}
 	}
@@ -126,9 +144,14 @@ func (b *backend) pathGenerateIntermediate(ctx context.Context, req *logical.Req
 		}
 	}
 
-	cb := &certutil.CertBundle{}
+	if parsedBundle.GoogleCloudKMSKey != "" {
+		resp.Data["google_cloud_kms_key"] = params.GoogleCloudKMSKey
+	}
+
+	cb := &WrappedCertBundle{}
 	cb.PrivateKey = csrb.PrivateKey
 	cb.PrivateKeyType = csrb.PrivateKeyType
+	cb.GoogleCloudKMSKey = csrb.GoogleCloudKMSKey
 
 	entry, err := logical.StorageEntryJSON("config/ca_bundle", cb)
 	if err != nil {
@@ -163,7 +186,7 @@ func (b *backend) pathSetSignedIntermediate(ctx context.Context, req *logical.Re
 		return logical.ErrorResponse("supplied certificate could not be successfully parsed"), nil
 	}
 
-	cb := &certutil.CertBundle{}
+	cb := &WrappedCertBundle{}
 	entry, err := req.Storage.Get(ctx, "config/ca_bundle")
 	if err != nil {
 		return nil, err
@@ -177,11 +200,11 @@ func (b *backend) pathSetSignedIntermediate(ctx context.Context, req *logical.Re
 		return nil, err
 	}
 
-	if len(cb.PrivateKey) == 0 || cb.PrivateKeyType == "" {
+	if (len(cb.PrivateKey) == 0 || cb.PrivateKeyType == "") && cb.GoogleCloudKMSKey == "" {
 		return logical.ErrorResponse("could not find an existing private key"), nil
 	}
 
-	parsedCB, err := cb.ToParsedCertBundle()
+	parsedCB, err := cb.ToParsedCertBundle(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -201,10 +224,11 @@ func (b *backend) pathSetSignedIntermediate(ctx context.Context, req *logical.Re
 		return nil, errwrap.Wrapf("verification of parsed bundle failed: {{err}}", err)
 	}
 
-	cb, err = inputBundle.ToCertBundle()
+	ccb, err := inputBundle.ToCertBundle()
 	if err != nil {
 		return nil, errwrap.Wrapf("error converting raw values into cert bundle: {{err}}", err)
 	}
+	cb.CertBundle = *ccb
 
 	entry, err = logical.StorageEntryJSON("config/ca_bundle", cb)
 	if err != nil {

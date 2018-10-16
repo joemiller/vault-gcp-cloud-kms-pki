@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/hashicorp/errwrap"
-	"github.com/hashicorp/vault/helper/certutil"
 	"github.com/hashicorp/vault/helper/errutil"
 	"github.com/hashicorp/vault/logical"
 	"github.com/hashicorp/vault/logical/framework"
@@ -217,7 +216,7 @@ func (b *backend) pathIssueSignCert(ctx context.Context, req *logical.Request, d
 		role:          role,
 		signingBundle: signingBundle,
 	}
-	var parsedBundle *certutil.ParsedCertBundle
+	var parsedBundle *WrappedParsedCertBundle
 	var err error
 	if useCSR {
 		parsedBundle, err = signCert(b, input, false, useCSRValues)

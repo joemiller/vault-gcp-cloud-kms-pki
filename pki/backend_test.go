@@ -13,6 +13,7 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"math/big"
 	mathrand "math/rand"
@@ -354,8 +355,8 @@ func TestBackend_ECRoles_CSR(t *testing.T) {
 }
 
 // Performs some validity checking on the returned bundles
-func checkCertsAndPrivateKey(keyType string, key crypto.Signer, usage x509.KeyUsage, extUsage x509.ExtKeyUsage, validity time.Duration, certBundle *certutil.CertBundle) (*certutil.ParsedCertBundle, error) {
-	parsedCertBundle, err := certBundle.ToParsedCertBundle()
+func checkCertsAndPrivateKey(keyType string, key crypto.Signer, usage x509.KeyUsage, extUsage x509.ExtKeyUsage, validity time.Duration, certBundle *WrappedCertBundle) (*WrappedParsedCertBundle, error) {
+	parsedCertBundle, err := certBundle.ToParsedCertBundle(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("error parsing cert bundle: %s", err)
 	}
@@ -830,13 +831,13 @@ func generateRoleSteps(t *testing.T, useCSRs bool) []logicaltest.TestStep {
 	}
 
 	getCountryCheck := func(role roleEntry) logicaltest.TestCheckFunc {
-		var certBundle certutil.CertBundle
+		var certBundle WrappedCertBundle
 		return func(resp *logical.Response) error {
 			err := mapstructure.Decode(resp.Data, &certBundle)
 			if err != nil {
 				return err
 			}
-			parsedCertBundle, err := certBundle.ToParsedCertBundle()
+			parsedCertBundle, err := certBundle.ToParsedCertBundle(context.Background())
 			if err != nil {
 				return fmt.Errorf("error checking generated certificate: %s", err)
 			}
@@ -851,13 +852,13 @@ func generateRoleSteps(t *testing.T, useCSRs bool) []logicaltest.TestStep {
 	}
 
 	getOuCheck := func(role roleEntry) logicaltest.TestCheckFunc {
-		var certBundle certutil.CertBundle
+		var certBundle WrappedCertBundle
 		return func(resp *logical.Response) error {
 			err := mapstructure.Decode(resp.Data, &certBundle)
 			if err != nil {
 				return err
 			}
-			parsedCertBundle, err := certBundle.ToParsedCertBundle()
+			parsedCertBundle, err := certBundle.ToParsedCertBundle(context.Background())
 			if err != nil {
 				return fmt.Errorf("error checking generated certificate: %s", err)
 			}
@@ -872,13 +873,13 @@ func generateRoleSteps(t *testing.T, useCSRs bool) []logicaltest.TestStep {
 	}
 
 	getOrganizationCheck := func(role roleEntry) logicaltest.TestCheckFunc {
-		var certBundle certutil.CertBundle
+		var certBundle WrappedCertBundle
 		return func(resp *logical.Response) error {
 			err := mapstructure.Decode(resp.Data, &certBundle)
 			if err != nil {
 				return err
 			}
-			parsedCertBundle, err := certBundle.ToParsedCertBundle()
+			parsedCertBundle, err := certBundle.ToParsedCertBundle(context.Background())
 			if err != nil {
 				return fmt.Errorf("error checking generated certificate: %s", err)
 			}
@@ -893,13 +894,13 @@ func generateRoleSteps(t *testing.T, useCSRs bool) []logicaltest.TestStep {
 	}
 
 	getLocalityCheck := func(role roleEntry) logicaltest.TestCheckFunc {
-		var certBundle certutil.CertBundle
+		var certBundle WrappedCertBundle
 		return func(resp *logical.Response) error {
 			err := mapstructure.Decode(resp.Data, &certBundle)
 			if err != nil {
 				return err
 			}
-			parsedCertBundle, err := certBundle.ToParsedCertBundle()
+			parsedCertBundle, err := certBundle.ToParsedCertBundle(context.Background())
 			if err != nil {
 				return fmt.Errorf("error checking generated certificate: %s", err)
 			}
@@ -914,13 +915,13 @@ func generateRoleSteps(t *testing.T, useCSRs bool) []logicaltest.TestStep {
 	}
 
 	getProvinceCheck := func(role roleEntry) logicaltest.TestCheckFunc {
-		var certBundle certutil.CertBundle
+		var certBundle WrappedCertBundle
 		return func(resp *logical.Response) error {
 			err := mapstructure.Decode(resp.Data, &certBundle)
 			if err != nil {
 				return err
 			}
-			parsedCertBundle, err := certBundle.ToParsedCertBundle()
+			parsedCertBundle, err := certBundle.ToParsedCertBundle(context.Background())
 			if err != nil {
 				return fmt.Errorf("error checking generated certificate: %s", err)
 			}
@@ -935,13 +936,13 @@ func generateRoleSteps(t *testing.T, useCSRs bool) []logicaltest.TestStep {
 	}
 
 	getStreetAddressCheck := func(role roleEntry) logicaltest.TestCheckFunc {
-		var certBundle certutil.CertBundle
+		var certBundle WrappedCertBundle
 		return func(resp *logical.Response) error {
 			err := mapstructure.Decode(resp.Data, &certBundle)
 			if err != nil {
 				return err
 			}
-			parsedCertBundle, err := certBundle.ToParsedCertBundle()
+			parsedCertBundle, err := certBundle.ToParsedCertBundle(context.Background())
 			if err != nil {
 				return fmt.Errorf("error checking generated certificate: %s", err)
 			}
@@ -956,13 +957,13 @@ func generateRoleSteps(t *testing.T, useCSRs bool) []logicaltest.TestStep {
 	}
 
 	getPostalCodeCheck := func(role roleEntry) logicaltest.TestCheckFunc {
-		var certBundle certutil.CertBundle
+		var certBundle WrappedCertBundle
 		return func(resp *logical.Response) error {
 			err := mapstructure.Decode(resp.Data, &certBundle)
 			if err != nil {
 				return err
 			}
-			parsedCertBundle, err := certBundle.ToParsedCertBundle()
+			parsedCertBundle, err := certBundle.ToParsedCertBundle(context.Background())
 			if err != nil {
 				return fmt.Errorf("error checking generated certificate: %s", err)
 			}
@@ -979,7 +980,7 @@ func generateRoleSteps(t *testing.T, useCSRs bool) []logicaltest.TestStep {
 	// Returns a TestCheckFunc that performs various validity checks on the
 	// returned certificate information, mostly within checkCertsAndPrivateKey
 	getCnCheck := func(name string, role roleEntry, key crypto.Signer, usage x509.KeyUsage, extUsage x509.ExtKeyUsage, validity time.Duration) logicaltest.TestCheckFunc {
-		var certBundle certutil.CertBundle
+		var certBundle WrappedCertBundle
 		return func(resp *logical.Response) error {
 			err := mapstructure.Decode(resp.Data, &certBundle)
 			if err != nil {
@@ -2544,6 +2545,269 @@ func TestBackend_URI_SANs(t *testing.T) {
 			cert.URIs)
 	}
 }
+
+func TestBackend_Root_RSAGoogleKMS_acceptance(t *testing.T) {
+	if os.Getenv(logicaltest.TestEnvVar) == "" {
+		t.Skip(fmt.Sprintf("Acceptance tests skipped unless env '%s' set", logicaltest.TestEnvVar))
+		return
+	}
+
+	var err error
+	ctx := context.Background()
+
+	rootKey := os.Getenv("TEST_GOOGLE_KMS_ROOT_KEY")
+	if rootKey == "" {
+		t.Fatal("Environment variable TEST_GOOGLE_KMS_ROOT_KEY must be set to run this test")
+	}
+
+	googleCredsFile := os.Getenv("TEST_GOOGLE_CREDENTIALS_FILE")
+	if googleCredsFile == "" {
+		t.Fatal("Environment variable TEST_GOOGLE_CREDENTIALS_FILE must be set to run this test")
+	}
+	googleCredsJSON, err := ioutil.ReadFile(googleCredsFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Get a handle to the root signer key so that we can use it later to compare the public key on the self-signed cert against the public key stored in Google KMS
+	kmsSvc, err := newGoogleKMSClient(ctx, string(googleCredsJSON))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootSigner, err := kmsSigner(kmsSvc, rootKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	coreConfig := &vault.CoreConfig{
+		LogicalBackends: map[string]logical.Factory{
+			"pki": Factory,
+		},
+	}
+	cluster := vault.NewTestCluster(t, coreConfig, &vault.TestClusterOptions{
+		HandlerFunc: vaulthttp.Handler,
+	})
+	cluster.Start()
+	defer cluster.Cleanup()
+
+	client := cluster.Cores[0].Client
+	err = client.Sys().Mount("pki", &api.MountInput{
+		Type: "pki",
+		Config: api.MountConfigInput{
+			DefaultLeaseTTL: "16h",
+			MaxLeaseTTL:     "32h",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rootCAInfo, err := client.Logical().Write("pki/root/generate/internal", map[string]interface{}{
+		"common_name":          "myvault.com",
+		"google_cloud_kms_key": rootKey,
+		"google_credentials":   string(googleCredsJSON),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rootCAInfo == nil {
+		t.Fatal("expected ca info")
+	}
+	if rootCAInfo.Data["google_cloud_kms_key"] != rootKey {
+		t.Fatalf("Expected root CA info to include google_cloud_kms_key = %s, but got %s", rootKey, rootCAInfo.Data["google_cloud_kms_key"])
+	}
+	// verify the public key from the signed root cert matches the public key of the Google KMS key used to self-sign the cert
+	rootCertStr := rootCAInfo.Data["certificate"].(string)
+	block, _ := pem.Decode([]byte(rootCertStr))
+	rootCert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootCertPubkey := rootCert.PublicKey.(*rsa.PublicKey)
+	if !reflect.DeepEqual(rootCertPubkey, rootSigner.Public()) {
+		t.Fatal("Expected generated root cert public key to match public key of the Google KMS key")
+	}
+
+	// Create a role which does require CN (default)
+	_, err = client.Logical().Write("pki/roles/example", map[string]interface{}{
+		"allowed_domains":    "foobar.com",
+		"allow_subdomains":   true,
+		"allow_bare_domains": true,
+		"max_ttl":            "2h",
+	})
+
+	// Issue a cert. It should succeed
+	_, err = client.Logical().Write("pki/issue/example", map[string]interface{}{
+		"common_name": "foobar.com",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestBackend_Intermediate_RSAGoogleKMS_acceptance(t *testing.T) {
+	if os.Getenv(logicaltest.TestEnvVar) == "" {
+		t.Skip(fmt.Sprintf("Acceptance tests skipped unless env '%s' set", logicaltest.TestEnvVar))
+		return
+	}
+
+	var err error
+	ctx := context.Background()
+
+	rootKey := os.Getenv("TEST_GOOGLE_KMS_ROOT_KEY")
+	if rootKey == "" {
+		t.Fatal("Environment variable TEST_GOOGLE_KMS_ROOT_KEY must be set to run this test")
+	}
+	intKey := os.Getenv("TEST_GOOGLE_KMS_INTERMEDIATE_KEY")
+	if intKey == "" {
+		t.Fatal("Environment variable TEST_GOOGLE_KMS_INTERMEDIATE_KEY must be set to run this test")
+	}
+
+	googleCredsFile := os.Getenv("TEST_GOOGLE_CREDENTIALS_FILE")
+	if googleCredsFile == "" {
+		t.Fatal("Environment variable TEST_GOOGLE_CREDENTIALS_FILE must be set to run this test")
+	}
+	googleCredsJSON, err := ioutil.ReadFile(googleCredsFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Get a handle to the root and intermediate signer keys so that we can use it later to compare the public key on the self-signed cert against the public key stored in Google KMS
+	kmsSvc, err := newGoogleKMSClient(ctx, string(googleCredsJSON))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootSigner, err := kmsSigner(kmsSvc, rootKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	intSigner, err := kmsSigner(kmsSvc, intKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	coreConfig := &vault.CoreConfig{
+		LogicalBackends: map[string]logical.Factory{
+			"pki": Factory,
+		},
+	}
+	cluster := vault.NewTestCluster(t, coreConfig, &vault.TestClusterOptions{
+		HandlerFunc: vaulthttp.Handler,
+	})
+	cluster.Start()
+	defer cluster.Cleanup()
+
+	client := cluster.Cores[0].Client
+	err = client.Sys().Mount("root", &api.MountInput{
+		Type: "pki",
+		Config: api.MountConfigInput{
+			DefaultLeaseTTL: "16h",
+			MaxLeaseTTL:     "60h",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = client.Sys().Mount("int", &api.MountInput{
+		Type: "pki",
+		Config: api.MountConfigInput{
+			DefaultLeaseTTL: "4h",
+			MaxLeaseTTL:     "20h",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Direct issuing from root
+	rootCAInfo, err := client.Logical().Write("root/root/generate/internal", map[string]interface{}{
+		"ttl":                  "40h",
+		"common_name":          "myvault.com",
+		"google_cloud_kms_key": rootKey,
+		"google_credentials":   string(googleCredsJSON),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rootCAInfo.Data["google_cloud_kms_key"] != rootKey {
+		t.Fatalf("Expected root CA info to include google_cloud_kms_key = %s, but got %s", rootKey, rootCAInfo.Data["google_cloud_kms_key"])
+	}
+	// verify the public key from the signed root cert matches the public key of the Google KMS key used to self-sign the cert
+	rootCertStr := rootCAInfo.Data["certificate"].(string)
+	block, _ := pem.Decode([]byte(rootCertStr))
+	rootCert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootCertPubkey := rootCert.PublicKey.(*rsa.PublicKey)
+	if !reflect.DeepEqual(rootCertPubkey, rootSigner.Public()) {
+		t.Fatal("Expected generated root cert public key to match public key of the Google KMS key")
+	}
+
+	_, err = client.Logical().Write("root/roles/test", map[string]interface{}{
+		"allow_bare_domains": true,
+		"allow_subdomains":   true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := client.Logical().Write("int/intermediate/generate/internal", map[string]interface{}{
+		"common_name":          "myint.com",
+		"google_cloud_kms_key": intKey,
+		"google_credentials":   string(googleCredsJSON),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	csr := resp.Data["csr"]
+
+	_, err = client.Logical().Write("root/sign/test", map[string]interface{}{
+		"common_name": "myint.com",
+		"csr":         csr,
+		"ttl":         "60h",
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	_, err = client.Logical().Write("root/sign-verbatim/test", map[string]interface{}{
+		"common_name": "myint.com",
+		"csr":         csr,
+		"ttl":         "60h",
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	resp, err = client.Logical().Write("root/root/sign-intermediate", map[string]interface{}{
+		"common_name": "myint.com",
+		"csr":         csr,
+		"ttl":         "60h",
+	})
+	if err != nil {
+		t.Fatalf("got error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("got nil response")
+	}
+	if len(resp.Warnings) == 0 {
+		t.Fatalf("expected warnings, got %#v", *resp)
+	}
+	// verify the public key from the signed intermediate cert matches the public key of the Google KMS key
+	intCertStr := resp.Data["certificate"].(string)
+	block, _ = pem.Decode([]byte(intCertStr))
+	intCert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	intCertPubkey := intCert.PublicKey.(*rsa.PublicKey)
+	if !reflect.DeepEqual(intCertPubkey, intSigner.Public()) {
+		t.Fatal("Expected generated intermediate cert public key to match public key of the Google KMS key")
+	}
+}
+
 func setCerts() {
 	cak, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {

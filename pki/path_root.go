@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/errwrap"
+	"github.com/hashicorp/go-gcp-common/gcputil"
 	"github.com/hashicorp/vault/helper/errutil"
 	"github.com/hashicorp/vault/logical"
 	"github.com/hashicorp/vault/logical/framework"
@@ -32,6 +33,7 @@ func pathGenerateRoot(b *backend) *framework.Path {
 	ret.Fields = addCACommonFields(map[string]*framework.FieldSchema{})
 	ret.Fields = addCAKeyGenerationFields(ret.Fields)
 	ret.Fields = addCAIssueFields(ret.Fields)
+	ret.Fields = addGoogleKMSFields(ret.Fields)
 
 	return ret
 }
@@ -139,10 +141,26 @@ func (b *backend) pathCAGenerateRoot(ctx context.Context, req *logical.Request, 
 		role.MaxPathLength = &maxPathLength
 	}
 
+	params := &creationParameters{}
+	googleCloudKMSKey, ok := data.GetOk("google_cloud_kms_key")
+	if ok {
+		params.GoogleCloudKMSKey = googleCloudKMSKey.(string)
+	}
+
+	googleCredsRaw, ok := data.GetOk("google_credentials")
+	if ok {
+		_, err := gcputil.Credentials(googleCredsRaw.(string))
+		if err != nil {
+			return logical.ErrorResponse(fmt.Sprintf("invalid Google Cloud credentials JSON file: %v", err)), nil
+		}
+		params.GoogleCredentials = googleCredsRaw.(string)
+	}
+
 	input := &dataBundle{
 		req:     req,
 		apiData: data,
 		role:    role,
+		params:  params,
 	}
 	parsedBundle, err := generateCert(ctx, b, input, true)
 	if err != nil {
@@ -150,6 +168,8 @@ func (b *backend) pathCAGenerateRoot(ctx context.Context, req *logical.Request, 
 		case errutil.UserError:
 			return logical.ErrorResponse(err.Error()), nil
 		case errutil.InternalError:
+			return nil, err
+		default:
 			return nil, err
 		}
 	}
@@ -193,6 +213,10 @@ func (b *backend) pathCAGenerateRoot(ctx context.Context, req *logical.Request, 
 			resp.Data["private_key"] = base64.StdEncoding.EncodeToString(parsedBundle.PrivateKeyBytes)
 			resp.Data["private_key_type"] = cb.PrivateKeyType
 		}
+	}
+
+	if parsedBundle.GoogleCloudKMSKey != "" {
+		resp.Data["google_cloud_kms_key"] = params.GoogleCloudKMSKey
 	}
 
 	if data.Get("private_key_format").(string) == "pkcs8" {
