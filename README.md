@@ -55,7 +55,7 @@ authenticated.
     vault write \
         pki/root/generate/internal \
         common_name=rootCA \
-        google_cloud_kms_key="$KMS_KEY_PATH_SPEC" \
+        google_cloud_kms_key="projects/my-project/locations/us-west1/keyRings/my-keyring/cryptoKeys/root-ca/cryptoKeyVersions/1" \
         google_credentials=@service-account.json
     ```
 
@@ -65,7 +65,7 @@ authenticated.
     vault write \
         pki/intermediate/generate/internal \
         common_name=intCA \
-        google_cms_key="$KMS_KEY_PATH_SPEC" \
+        google_cloud_kms_key="projects/my-project/locations/us-west1/keyRings/my-keyring/cryptoKeys/root-ca/cryptoKeyVersions/1" \
         google_credentials=@service-account.json
     ```
 
